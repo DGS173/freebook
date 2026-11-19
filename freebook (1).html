@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Freebook</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{--bg:#EDF2F7;--card:#fff;--ink:#17284A;--mute:#5B6B88;--line:#D8E0EB;--acc:#F2A93B;--accink:#2A1B00;--soft:#DDF1EA;--soft-ink:#0E5A43}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0F1A33;--card:#192848;--ink:#EAF0FB;--mute:#9DB0D3;--line:#2B3D63;--soft:#173F3A;--soft-ink:#9BE3C7}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 "Bricolage Grotesque",system-ui,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+header{padding:14px 18px 6px;display:flex;align-items:baseline;justify-content:space-between}
+h1{margin:0;font-weight:800;font-size:30px;letter-spacing:-.03em}
+h1 i{font-style:normal;color:var(--acc)}
+h2{font-size:18px;margin:14px 2px 8px}
+header small{color:var(--mute)}
+main{flex:1;overflow-y:auto;padding:8px 14px 16px;max-width:640px;width:100%;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:12px;align-items:center}
+.av{width:42px;height:42px;border-radius:50%;background:var(--soft);color:var(--soft-ink);display:grid;place-items:center;font-weight:800;flex:none}
+.grow{flex:1;min-width:0}
+b{font-weight:600}
+.mute{color:var(--mute);font-size:14px}
+textarea,input,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 8px}
+textarea{resize:vertical;min-height:70px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+button{font:inherit;font-weight:600;border:0;border-radius:999px;padding:9px 16px;background:var(--acc);color:var(--accink);cursor:pointer}
+button.ghost{background:transparent;color:var(--mute);padding:6px 10px;border:1px solid var(--line)}
+button.on{background:var(--soft);color:var(--soft-ink);border-color:transparent}
+button[disabled]{opacity:.6}
+.text{margin:10px 0 8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.tag{display:inline-block;background:var(--soft);color:var(--soft-ink);border-radius:8px;padding:2px 8px;font-size:13px;font-weight:600}
+nav{display:flex;background:var(--card);border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
+nav button{flex:1;min-width:0;background:none;color:var(--mute);border-radius:0;padding:12px 2px;font-size:14px}
+nav button[aria-current="true"]{color:var(--ink);box-shadow:inset 0 -3px 0 var(--acc)}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+#toast.show{opacity:1}
+.bub{max-width:80%;padding:8px 12px;border-radius:16px;margin:0 0 6px;overflow-wrap:anywhere;white-space:pre-wrap;background:var(--card);border:1px solid var(--line)}
+.bub.me{margin-inline-start:auto;background:var(--soft);color:var(--soft-ink);border-color:transparent}
+.bub small{display:block;color:var(--mute);font-size:12px}
+.bub button{margin-top:6px}
+#msgs{display:flex;flex-direction:column;margin:10px 0}
+.link{background:none;color:var(--mute);text-decoration:underline;padding:6px 0}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+</head>
+<body>
+<header><h1>Freebook<i>.</i></h1><small id="who"></small></header>
+<nav id="nav" hidden>
+<button data-tab="feed">Accueil</button><button data-tab="friends">Amis</button><button data-tab="chat">Messages</button><button data-tab="ads">Annonces</button><button data-tab="me">Profil</button>
+</nav>
+<main id="main"></main>
+<div id="toast" role="status"></div>
+<script>
+const SUPABASE_URL="https://buastgxcqpejeyldbuby.supabase.co";
+const SUPABASE_KEY="sb_publishable_EA7CJVcQdqBZ9Tdv5ImSTQ_uge02LrJ";
+const COUNTRIES=["Lituanie","France","Maroc","Sénégal","Canada","Brésil","Inde","Nigéria","Allemagne","Japon","États-Unis","Autre"];
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let me=null,tab="feed",mode="signup",chat=null,chan=null;
+const LANGS={fr:"Français",en:"English",es:"Español",pt:"Português",ar:"العربية"},LK=Object.keys(LANGS),TX={};
+`Crée ton profil|Create your profile|Crea tu perfil|Crie seu perfil|أنشئ ملفك الشخصي
+Connexion|Log in|Iniciar sesión|Entrar|تسجيل الدخول
+Retrouve des amis du monde entier, publie des statuts et des annonces.|Find friends worldwide, post updates and ads.|Encuentra amigos de todo el mundo, publica estados y anuncios.|Encontre amigos do mundo todo, publique status e anúncios.|اعثر على أصدقاء من حول العالم وانشر الحالات والإعلانات.
+Ton nom|Your name|Tu nombre|Seu nome|اسمك
+Ton pays|Your country|Tu país|Seu país|بلدك
+Email|Email|Correo electrónico|E-mail|البريد الإلكتروني
+Mot de passe (6 caractères minimum)|Password (6 characters minimum)|Contraseña (mínimo 6 caracteres)|Senha (mínimo 6 caracteres)|كلمة المرور (6 أحرف على الأقل)
+Créer mon compte|Create my account|Crear mi cuenta|Criar minha conta|إنشاء حسابي
+Me connecter|Log in|Iniciar sesión|Entrar|تسجيل الدخول
+J’ai déjà un compte|I already have an account|Ya tengo una cuenta|Já tenho uma conta|لدي حساب بالفعل
+Je n’ai pas encore de compte|I don’t have an account yet|Aún no tengo cuenta|Ainda não tenho conta|ليس لدي حساب بعد
+Langue|Language|Idioma|Idioma|اللغة
+Accueil|Home|Inicio|Início|الرئيسية
+Amis|Friends|Amigos|Amigos|الأصدقاء
+Messages|Messages|Mensajes|Mensagens|الرسائل
+Message|Message|Mensaje|Mensagem|رسالة
+Annonces|Ads|Anuncios|Anúncios|الإعلانات
+Profil|Profile|Perfil|Perfil|الملف
+Publier le statut|Post status|Publicar estado|Publicar status|نشر الحالة
+Aucun statut pour l’instant. Ajoute des amis dans l’onglet Amis pour voir leurs statuts.|No posts yet. Add friends in the Friends tab to see their posts.|Aún no hay estados. Agrega amigos en la pestaña Amigos para verlos.|Nenhum status ainda. Adicione amigos na aba Amigos para vê-los.|لا توجد حالات بعد. أضف أصدقاء من تبويب الأصدقاء لرؤية حالاتهم.
+J’aime|Like|Me gusta|Curtir|إعجاب
+Nouveau statut|New status|Nuevo estado|Novo status|حالة جديدة
+Quoi de neuf, {0} ?|What’s new, {0}?|¿Qué hay de nuevo, {0}?|O que há de novo, {0}?|ما الجديد يا {0}؟
+Demandes reçues|Requests received|Solicitudes recibidas|Solicitações recebidas|الطلبات الواردة
+Mes amis ({0})|My friends ({0})|Mis amigos ({0})|Meus amigos ({0})|أصدقائي ({0})
+Tu n’as pas encore d’amis. Envoie une demande ci-dessous.|You have no friends yet. Send a request below.|Aún no tienes amigos. Envía una solicitud abajo.|Você ainda não tem amigos. Envie um pedido abaixo.|ليس لديك أصدقاء بعد. أرسل طلبًا أدناه.
+Personnes à découvrir|People you may know|Personas que quizá conozcas|Pessoas que você talvez conheça|أشخاص قد تعرفهم
+Personne d’autre n’est inscrit pour l’instant. Invite tes proches à rejoindre Freebook !|No one else has signed up yet. Invite your friends to join Freebook!|Nadie más se ha registrado. ¡Invita a tus allegados a unirse a Freebook!|Mais ninguém se cadastrou. Convide seus amigos para o Freebook!|لم يسجل أحد آخر بعد. ادعُ أحباءك للانضمام إلى Freebook!
+Accepter|Accept|Aceptar|Aceitar|قبول
+Demande envoyée|Request sent|Solicitud enviada|Pedido enviado|تم إرسال الطلب
+Ajouter|Add|Agregar|Adicionar|إضافة
+Écrire|Write|Escribir|Escrever|اكتب
+Tu peux écrire et appeler tes amis. Ajoute-en dans l’onglet Amis.|You can message and call your friends. Add some in the Friends tab.|Puedes escribir y llamar a tus amigos. Agrégalos en la pestaña Amigos.|Você pode escrever e ligar para seus amigos. Adicione-os na aba Amigos.|يمكنك مراسلة أصدقائك والاتصال بهم. أضفهم من تبويب الأصدقاء.
+📞 Appeler|📞 Call|📞 Llamar|📞 Ligar|📞 اتصال
+Aucun message. Dis bonjour !|No messages. Say hello!|Sin mensajes. ¡Saluda!|Sem mensagens. Diga olá!|لا رسائل. قل مرحبًا!
+Ton message…|Your message…|Tu mensaje…|Sua mensagem…|رسالتك…
+Envoyer|Send|Enviar|Enviar|إرسال
+Rejoindre l’appel|Join the call|Unirse a la llamada|Entrar na chamada|الانضمام إلى المكالمة
+Tu as lancé un appel vidéo|You started a video call|Iniciaste una videollamada|Você iniciou uma chamada de vídeo|بدأت مكالمة فيديو
+Appel vidéo de {0}|Video call from {0}|Videollamada de {0}|Chamada de vídeo de {0}|مكالمة فيديو من {0}
+Titre de l’annonce|Ad title|Título del anuncio|Título do anúncio|عنوان الإعلان
+Décris ton annonce|Describe your ad|Describe tu anuncio|Descreva seu anúncio|صف إعلانك
+Publier l’annonce|Post ad|Publicar anuncio|Publicar anúncio|نشر الإعلان
+Titre|Title|Título|Título|العنوان
+Texte|Text|Texto|Texto|النص
+Catégorie|Category|Categoría|Categoria|الفئة
+Supprimer|Delete|Eliminar|Excluir|حذف
+Emploi|Job|Empleo|Emprego|وظيفة
+Événement|Event|Evento|Evento|فعالية
+À vendre|For sale|En venta|À venda|للبيع
+Service|Service|Servicio|Serviço|خدمة
+Autre|Other|Otro|Outro|أخرى
+Modifier mon profil|Edit my profile|Editar mi perfil|Editar meu perfil|تعديل ملفي
+Nom|Name|Nombre|Nome|الاسم
+Pays|Country|País|País|البلد
+Enregistrer|Save|Guardar|Salvar|حفظ
+Me déconnecter|Log out|Cerrar sesión|Sair|تسجيل الخروج
+{0} amis · {1} statuts|{0} friends · {1} posts|{0} amigos · {1} estados|{0} amigos · {1} status|{0} أصدقاء · {1} حالات
+Profil mis à jour|Profile updated|Perfil actualizado|Perfil atualizado|تم تحديث الملف
+Entre ton nom|Enter your name|Escribe tu nombre|Digite seu nome|أدخل اسمك
+Entre un email et un mot de passe de 6 caractères minimum|Enter an email and a password of at least 6 characters|Escribe un correo y una contraseña de al menos 6 caracteres|Digite um e-mail e uma senha de pelo menos 6 caracteres|أدخل بريدًا وكلمة مرور من 6 أحرف على الأقل
+Compte créé. Connecte-toi maintenant.|Account created. Log in now.|Cuenta creada. Inicia sesión ahora.|Conta criada. Entre agora.|تم إنشاء الحساب. سجّل الدخول الآن.
+Écris quelque chose avant de publier|Write something before posting|Escribe algo antes de publicar|Escreva algo antes de publicar|اكتب شيئًا قبل النشر
+Statut publié|Status posted|Estado publicado|Status publicado|تم نشر الحالة
+Ami ajouté|Friend added|Amigo agregado|Amigo adicionado|تمت إضافة الصديق
+Ajoute un titre et un texte|Add a title and text|Agrega un título y un texto|Adicione um título e um texto|أضف عنوانًا ونصًا
+Annonce publiée|Ad posted|Anuncio publicado|Anúncio publicado|تم نشر الإعلان
+Erreur|Error|Error|Erro|خطأ
+Autorise les fenêtres pop-up pour rejoindre l’appel|Allow pop-ups to join the call|Permite las ventanas emergentes para unirte|Permita pop-ups para entrar na chamada|اسمح بالنوافذ المنبثقة للانضمام
+Nouveau message de {0}|New message from {0}|Nuevo mensaje de {0}|Nova mensagem de {0}|رسالة جديدة من {0}
+{0} t’appelle — ouvre Messages|{0} is calling you — open Messages|{0} te llama — abre Mensajes|{0} está ligando — abra Mensagens|{0} يتصل بك — افتح الرسائل
+Chargement…|Loading…|Cargando…|Carregando…|جارٍ التحميل…
+Impossible de charger. Vérifie ta connexion et réessaie.|Could not load. Check your connection and try again.|No se pudo cargar. Revisa tu conexión e inténtalo de nuevo.|Não foi possível carregar. Verifique sua conexão e tente novamente.|تعذّر التحميل. تحقق من اتصالك وأعد المحاولة.
+à l’instant|just now|ahora mismo|agora mesmo|الآن
+il y a {0} min|{0} min ago|hace {0} min|há {0} min|منذ {0} د
+il y a {0} h|{0} h ago|hace {0} h|há {0} h|منذ {0} س
+il y a {0} j|{0} d ago|hace {0} d|há {0} d|منذ {0} ي
+Lituanie|Lithuania|Lituania|Lituânia|ليتوانيا
+France|France|Francia|França|فرنسا
+Maroc|Morocco|Marruecos|Marrocos|المغرب
+Sénégal|Senegal|Senegal|Senegal|السنغال
+Canada|Canada|Canadá|Canadá|كندا
+Brésil|Brazil|Brasil|Brasil|البرازيل
+Inde|India|India|Índia|الهند
+Nigéria|Nigeria|Nigeria|Nigéria|نيجيريا
+Allemagne|Germany|Alemania|Alemanha|ألمانيا
+Japon|Japan|Japón|Japão|اليابان
+États-Unis|United States|Estados Unidos|Estados Unidos|الولايات المتحدة`.split("\n").forEach(r=>{const c=r.split("|");TX[c[0]]=c.slice(1)});
+let lang="fr";try{const l=localStorage.getItem("lang")||(navigator.language||"").slice(0,2);if(LK.includes(l))lang=l}catch(e){}
+const tr=(k,...a)=>{const i=LK.indexOf(lang);return((TX[k]&&i>0?TX[k][i-1]:k)||k).replace(/\{(\d)\}/g,(_,j)=>a[j]??"")};
+const O=new WeakMap();
+function applyLang(){
+ document.documentElement.lang=lang;document.documentElement.dir=lang==="ar"?"rtl":"ltr";
+ const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+ while(n=w.nextNode()){if(n.parentNode.closest("script,style"))continue;
+  const o=O.get(n)??n.nodeValue,k=o.trim();
+  if(TX[k]){O.set(n,o);n.nodeValue=o.replace(k,tr(k))}}
+ document.querySelectorAll("[placeholder],[aria-label]").forEach(e=>{for(const a of["placeholder","aria-label"])if(e.hasAttribute(a)){const o=e.getAttribute("data-o-"+a)??e.getAttribute(a);e.setAttribute("data-o-"+a,o);e.setAttribute(a,tr(o))}});
+}
+const langSel=()=>`<label class="mute" for="lg">${tr("Langue")}</label><select id="lg">${LK.map(l=>`<option value="${l}" ${l===lang?"selected":""}>${LANGS[l]}</option>`).join("")}</select>`;
+async function setLang(l){lang=l;try{localStorage.setItem("lang",l)}catch(e){}if(me)sb.auth.updateUser({data:{lang:l}});render()}
+document.addEventListener("change",e=>{if(e.target.id==="lg")setLang(e.target.value)});
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const init=n=>(n||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
+const av=n=>`<div class="av" aria-hidden="true">${esc(init(n))}</div>`;
+function when(d){const m=Math.round((Date.now()-new Date(d))/6e4);if(m<1)return tr("à l’instant");if(m<60)return tr("il y a {0} min",m);const h=Math.round(m/60);return h<24?tr("il y a {0} h",h):tr("il y a {0} j",Math.round(h/24))}
+function toast(m){const t=$("#toast");t.textContent=tr(m);t.classList.add("show");clearTimeout(toast.k);toast.k=setTimeout(()=>t.classList.remove("show"),2800)}
+const fail=e=>{console.error(e);toast(tr("Erreur")+" : "+(e.message||e))};
+
+async function boot(){
+ const{data}=await sb.auth.getSession();
+ if(data.session)await loadMe(data.session.user);
+ render();
+}
+async function loadMe(user){
+ const L=user.user_metadata?.lang;if(LK.includes(L)){lang=L;try{localStorage.setItem("lang",L)}catch(e){}}
+ let{data}=await sb.from("profiles").select("*").eq("id",user.id).maybeSingle();
+ if(!data){
+  const m=user.user_metadata||{};
+  const r=await sb.from("profiles").insert({id:user.id,name:m.name||user.email.split("@")[0],country:m.country||"Autre"}).select().single();
+  if(r.error)return fail(r.error);
+  data=r.data;
+ }
+ me=data;
+ listen();
+}
+function listen(){
+ if(chan)return;
+ chan=sb.channel("msg-"+me.id).on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:"receiver=eq."+me.id},async({new:m})=>{
+  if(tab==="chat"&&chat&&chat.id===m.sender){const d=$("#mi")?.value||"";await render();if($("#mi"))$("#mi").value=d;return}
+  const{data:p}=await sb.from("profiles").select("name").eq("id",m.sender).maybeSingle();
+  const n=p?.name||"Un ami";
+  toast(m.kind==="call"?tr("{0} t’appelle — ouvre Messages",n):tr("Nouveau message de {0}",n));
+  if(tab==="chat"&&!chat)render();
+ }).subscribe();
+}
+async function render(){await render0();applyLang()}
+async function render0(){
+ $("#nav").hidden=!me;
+ const main=$("#main");
+ if(!me){$("#who").textContent="";
+  const up=mode==="signup";
+  main.innerHTML=`<div class="card" style="margin-top:20px">${langSel()}<h2 style="margin-top:0">${up?"Crée ton profil":"Connexion"}</h2>
+  <p class="mute">Retrouve des amis du monde entier, publie des statuts et des annonces.</p>
+  ${up?`<label class="mute" for="n">Ton nom</label><input id="n" autocomplete="name" maxlength="40"><label class="mute" for="c">Ton pays</label><select id="c">${COUNTRIES.map(c=>`<option value="${c}">${c}</option>`).join("")}</select>`:""}
+  <label class="mute" for="e">Email</label><input id="e" type="email" autocomplete="email">
+  <label class="mute" for="p">Mot de passe (6 caractères minimum)</label><input id="p" type="password" autocomplete="${up?"new-password":"current-password"}">
+  <button data-act="${up?"signup":"login"}">${up?"Créer mon compte":"Me connecter"}</button><br>
+  <button class="link" data-act="switch">${up?"J’ai déjà un compte":"Je n’ai pas encore de compte"}</button></div>`;return}
+ $("#who").textContent=me.name;
+ document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===tab));
+ main.innerHTML=`<p class="mute">Chargement…</p>`;
+ try{
+  if(tab==="feed")main.innerHTML=await viewFeed();
+  if(tab==="friends")main.innerHTML=await viewFriends();
+  if(tab==="ads")main.innerHTML=await viewAds();
+  if(tab==="chat")main.innerHTML=chat?await viewChat():await viewChatList();
+  if(tab==="me")main.innerHTML=await viewMe();
+ }catch(e){fail(e);main.innerHTML=`<p class="mute">Impossible de charger. Vérifie ta connexion et réessaie.</p>`}
+}
+async function viewFeed(){
+ const{data,error}=await sb.from("posts").select("id,body,created_at,author,profiles(name,country),likes(user_id)").order("created_at",{ascending:false}).limit(50);
+ if(error)throw error;
+ return `<div class="card"><textarea id="st" maxlength="400" placeholder="${tr("Quoi de neuf, {0} ?",esc(me.name.split(" ")[0]))}" aria-label="Nouveau statut"></textarea><button data-act="post">Publier le statut</button></div>`+
+ (data.length?data.map(p=>{const liked=p.likes.some(l=>l.user_id===me.id),n=p.likes.length;
+  return `<article class="card"><div class="row">${av(p.profiles?.name)}<div class="grow"><b>${esc(p.profiles?.name)}</b><div class="mute">${esc(p.profiles?.country)} · ${when(p.created_at)}</div></div></div><p class="text">${esc(p.body)}</p><button class="ghost ${liked?"on":""}" data-act="like" data-id="${p.id}" data-liked="${liked}" aria-pressed="${liked}">${tr("J’aime")}${n?" · "+n:""}</button></article>`}).join(""):`<p class="mute">Aucun statut pour l’instant. Ajoute des amis dans l’onglet Amis pour voir leurs statuts.</p>`);
+}
+async function viewFriends(){
+ const[a,b]=await Promise.all([sb.from("profiles").select("id,name,country").neq("id",me.id).order("name").limit(200),sb.from("friendships").select("*")]);
+ if(a.error)throw a.error;if(b.error)throw b.error;
+ const rel=id=>{const f=b.data.find(x=>x.requester===id||x.receiver===id);if(!f)return{s:"none"};
+  if(f.status==="accepted")return{s:"friend",f};return f.requester===me.id?{s:"sent",f}:{s:"received",f}};
+ const row=(p,r)=>`<div class="card row">${av(p.name)}<div class="grow"><b>${esc(p.name)}</b><div class="mute">${esc(p.country)}</div></div>${r}</div>`;
+ const L={friend:[],received:[],other:[]};
+ a.data.forEach(p=>{const r=rel(p.id);(r.s==="friend"?L.friend:r.s==="received"?L.received:L.other).push([p,r])});
+ const btn=([p,r])=>r.s==="friend"?`<button data-act="chat" data-id="${p.id}" data-name="${esc(p.name)}">Message</button>`:r.s==="received"?`<button data-act="accept" data-id="${r.f.id}">Accepter</button>`:r.s==="sent"?`<button class="ghost" disabled>Demande envoyée</button>`:`<button data-act="add" data-id="${p.id}">Ajouter</button>`;
+ return (L.received.length?`<h2>Demandes reçues</h2>`+L.received.map(x=>row(x[0],btn(x))).join(""):"")+
+ `<h2>${tr("Mes amis ({0})",L.friend.length)}</h2>`+(L.friend.length?L.friend.map(x=>row(x[0],btn(x))).join(""):`<p class="mute">Tu n’as pas encore d’amis. Envoie une demande ci-dessous.</p>`)+
+ `<h2>Personnes à découvrir</h2>`+(L.other.length?L.other.map(x=>row(x[0],btn(x))).join(""):`<p class="mute">Personne d’autre n’est inscrit pour l’instant. Invite tes proches à rejoindre Freebook !</p>`);
+}
+async function viewAds(){
+ const{data,error}=await sb.from("ads").select("id,category,title,body,created_at,author,profiles(name,country)").order("created_at",{ascending:false}).limit(50);
+ if(error)throw error;
+ return `<div class="card"><input id="at" maxlength="70" placeholder="Titre de l’annonce" aria-label="Titre"><textarea id="ab" maxlength="500" placeholder="Décris ton annonce" aria-label="Texte"></textarea><select id="ac" aria-label="Catégorie"><option value="Emploi">Emploi</option><option value="Événement">Événement</option><option value="À vendre">À vendre</option><option value="Service">Service</option><option value="Autre">Autre</option></select><button data-act="ad">Publier l’annonce</button></div>`+
+ data.map(a=>`<article class="card"><span class="tag">${esc(a.category)}</span><h3 style="margin:8px 0 2px">${esc(a.title)}</h3><p class="text">${esc(a.body)}</p><div class="mute">${esc(a.profiles?.name)} · ${esc(a.profiles?.country)} · ${when(a.created_at)}${a.author===me.id?` · <button class="link" data-act="delad" data-id="${a.id}">Supprimer</button>`:""}</div></article>`).join("");
+}
+async function myFriends(){
+ const{data,error}=await sb.from("friendships").select("requester,receiver").eq("status","accepted");
+ if(error)throw error;
+ const ids=data.map(f=>f.requester===me.id?f.receiver:f.requester);
+ if(!ids.length)return[];
+ const r=await sb.from("profiles").select("id,name,country").in("id",ids).order("name");
+ if(r.error)throw r.error;return r.data;
+}
+async function viewChatList(){
+ const fr=await myFriends();
+ return `<h2>Messages</h2>`+(fr.length?fr.map(p=>`<div class="card row">${av(p.name)}<div class="grow"><b>${esc(p.name)}</b><div class="mute">${esc(p.country)}</div></div><button data-act="chat" data-id="${p.id}" data-name="${esc(p.name)}">Écrire</button></div>`).join(""):`<p class="mute">Tu peux écrire et appeler tes amis. Ajoute-en dans l’onglet Amis.</p>`);
+}
+async function viewChat(){
+ const q=`and(sender.eq.${me.id},receiver.eq.${chat.id}),and(sender.eq.${chat.id},receiver.eq.${me.id})`;
+ const{data,error}=await sb.from("messages").select("*").or(q).order("created_at",{ascending:true}).limit(200);
+ if(error)throw error;
+ const list=data.map(m=>{const mine=m.sender===me.id;
+  const body=m.kind==="call"?`📞 ${mine?tr("Tu as lancé un appel vidéo"):tr("Appel vidéo de {0}",esc(chat.name))}<br><button data-act="join" data-room="${esc(m.room)}">Rejoindre l’appel</button>`:esc(m.body);
+  return `<div class="bub ${mine?"me":""}">${body}<small>${when(m.created_at)}</small></div>`}).join("");
+ return `<div class="row"><button class="ghost" data-act="back">←</button><div class="grow"><b>${esc(chat.name)}</b></div><button data-act="call">📞 Appeler</button></div>
+ <div id="msgs">${list||`<p class="mute">Aucun message. Dis bonjour !</p>`}</div>
+ <textarea id="mi" maxlength="1000" placeholder="Ton message…" aria-label="Message"></textarea><button data-act="send">Envoyer</button>`;
+}
+async function viewMe(){
+ const[f,p]=await Promise.all([myFriends(),sb.from("posts").select("id",{count:"exact",head:true}).eq("author",me.id)]);
+ return `<div class="card"><div class="row">${av(me.name)}<div class="grow"><b>${esc(me.name)}</b><div class="mute">${esc(me.country)} · ${tr("{0} amis · {1} statuts",f.length,p.count||0)}</div></div></div></div>
+ <div class="card"><h2 style="margin-top:0">Modifier mon profil</h2>${langSel()}<label class="mute" for="en">Nom</label><input id="en" maxlength="40" value="${esc(me.name)}"><label class="mute" for="ec">Pays</label><select id="ec">${COUNTRIES.map(c=>`<option value="${c}" ${c===me.country?"selected":""}>${c}</option>`).join("")}</select><button data-act="saveme">Enregistrer</button></div>
+ <button class="ghost" data-act="logout">Me déconnecter</button>`;
+}
+const _unused=()=>`<div class="card"><div class="row">${av(me.name)}<div class="grow"><b>${esc(me.name)}</b><div class="mute">${esc(me.country)}</div></div></div><br><button class="ghost" data-act="logout">Me déconnecter</button></div>`;
+
+function openCall(room){
+ const name=encodeURIComponent(JSON.stringify(me.name));
+ const w=window.open("https://meet.jit.si/"+encodeURIComponent(room)+"#userInfo.displayName="+name,"_blank","noopener");
+ if(!w)toast("Autorise les fenêtres pop-up pour rejoindre l’appel");
+}
+document.addEventListener("click",async e=>{
+ const t=e.target.closest("[data-tab],[data-act]");if(!t)return;
+ if(t.dataset.tab){tab=t.dataset.tab;chat=null;render();return}
+ const a=t.dataset.act,id=t.dataset.id;
+ try{
+  if(a==="switch"){mode=mode==="signup"?"login":"signup";render();return}
+  if(a==="signup"||a==="login"){
+   const email=$("#e").value.trim(),password=$("#p").value;
+   if(!email||password.length<6){toast("Entre un email et un mot de passe de 6 caractères minimum");return}
+   t.disabled=true;let r;
+   if(a==="signup"){const name=$("#n").value.trim();if(!name){toast("Entre ton nom");t.disabled=false;return}
+    r=await sb.auth.signUp({email,password,options:{data:{name,country:$("#c").value,lang}}})}
+   else r=await sb.auth.signInWithPassword({email,password});
+   if(r.error){t.disabled=false;return fail(r.error)}
+   if(!r.data.session){t.disabled=false;toast("Compte créé. Connecte-toi maintenant.");mode="login";render();return}
+   await loadMe(r.data.user);tab="feed";render();return}
+  if(a==="chat"){chat={id,name:t.dataset.name};tab="chat";render();return}
+  if(a==="back"){chat=null;render();return}
+  if(a==="join"){openCall(t.dataset.room);return}
+  if(a==="call"){
+   const room="freebook-"+crypto.randomUUID();
+   openCall(room);
+   const r=await sb.from("messages").insert({receiver:chat.id,kind:"call",room,body:"Appel vidéo"});
+   if(r.error)throw r.error;render();return}
+  if(a==="send"){const v=$("#mi").value.trim();if(!v)return;
+   const r=await sb.from("messages").insert({receiver:chat.id,body:v});if(r.error)throw r.error;render();return}
+  if(a==="saveme"){const name=$("#en").value.trim();if(!name){toast("Entre ton nom");return}
+   const r=await sb.from("profiles").update({name,country:$("#ec").value}).eq("id",me.id).select().single();
+   if(r.error)throw r.error;me=r.data;toast("Profil mis à jour");render();return}
+  if(a==="logout"){if(chan){sb.removeChannel(chan);chan=null}chat=null;await sb.auth.signOut();me=null;mode="login";render();return}
+  if(a==="post"){const v=$("#st").value.trim();if(!v){toast("Écris quelque chose avant de publier");return}
+   const r=await sb.from("posts").insert({body:v});if(r.error)throw r.error;toast("Statut publié");render()}
+  if(a==="like"){const r=t.dataset.liked==="true"?await sb.from("likes").delete().match({post_id:id,user_id:me.id}):await sb.from("likes").insert({post_id:id});if(r.error)throw r.error;render()}
+  if(a==="add"){const r=await sb.from("friendships").insert({requester:me.id,receiver:id});if(r.error)throw r.error;toast("Demande envoyée");render()}
+  if(a==="accept"){const r=await sb.from("friendships").update({status:"accepted"}).eq("id",id);if(r.error)throw r.error;toast("Ami ajouté");render()}
+  if(a==="ad"){const ti=$("#at").value.trim(),bo=$("#ab").value.trim();if(!ti||!bo){toast("Ajoute un titre et un texte");return}
+   const r=await sb.from("ads").insert({title:ti,body:bo,category:$("#ac").value});if(r.error)throw r.error;toast("Annonce publiée");render()}
+  if(a==="delad"){const r=await sb.from("ads").delete().eq("id",id);if(r.error)throw r.error;render()}
+ }catch(err){fail(err)}
+});
+boot();
+</script>
+</body>
+</html>
